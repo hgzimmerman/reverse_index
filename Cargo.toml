@@ -1,8 +1,12 @@
 [package]
 name = "reverse_index"
 version = "0.1.0"
+description = "Reverse index for fast text search"
 authors = ["Henry Zimmerman <zimhen7@gmail.com>"]
 edition = "2018"
+license = "MIT"
+keywords = ["reverse", "index"]
+repository = "https://github.com/hgzimmerman/reverse_index"
 
 [dependencies]
 apply = "0.2.2"
