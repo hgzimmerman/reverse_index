@@ -1,19 +1,35 @@
-use crate::ReverseIndex;
+use crate::reverse_index::ReverseIndex;
 use apply::Apply;
+
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Document {
+    pub name: String,
+    pub content: String
+}
+
+impl AsRef<str> for Document {
+    fn as_ref(&self) -> &str {
+        &self.content
+    }
+}
+
 
 /// The DocumentReverseIndex will ingest a document and segment it into individual words.
 /// These words are used as keys that can be used to match on the whole document.
 /// This structure is useful in finding a document given a listing of words that appear in the
 /// document. 
-pub struct DocumentReverseIndex (ReverseIndex);
+pub struct DocumentReverseIndex<T: AsRef<str> + PartialEq + Ord> (ReverseIndex<T>);
 
-impl DocumentReverseIndex {
+impl <T> DocumentReverseIndex<T>
+    where T: AsRef<str> + PartialEq + Ord
+{
     /// String_index MUST be in the range of the buffer.
     /// Gets the string in the buffer at the specified index,
     /// splits the string into words delimited by whitespace,
     /// inserts these words as keys into the reverse index, pointing to the index.
-    fn split_string_and_index(ri: &mut ReverseIndex, string_index: usize) {
-        let string = &ri.buffer[string_index]; // get the string from the buffer.
+    fn split_string_and_index(ri: &mut ReverseIndex<T>, string_index: usize) {
+        let string: &str = &ri.buffer[string_index].as_ref(); // get the string from the buffer.
 
         for word in string.split_whitespace() {
             ri.map.entry(word.to_string())
@@ -32,12 +48,12 @@ impl DocumentReverseIndex {
 
     /// Constructs the reverse index from a buffer of documents.
     /// This offers no deduplication functionality.
-    pub fn from_buffer(buffer: Vec<String> ) -> Self {
-        ReverseIndex::from_buffer(buffer, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
+    pub fn from_buffer(buffer: Vec<T> ) -> Self {
+        ReverseIndex::<T>::from_buffer(buffer, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
     }
 
     /// Adds a document to the reverse index.
-    pub fn add_document(self, string: String) -> Self {
+    pub fn add_document(self, string: T) -> Self {
         self.0.add_word(string, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
     }
 
@@ -49,7 +65,7 @@ impl DocumentReverseIndex {
     /// # Arguments
     /// * `search` - The search string used to find documents.
     /// * `number_of_documents` - The upper bound on the number of documents to return.
-    pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<String> {
+    pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
         let search_words: Vec<&str> = search.split_whitespace().collect();
 
         use std::collections::BTreeMap;
@@ -74,7 +90,7 @@ impl DocumentReverseIndex {
         indicies_to_counts
             .into_iter()
             .filter_map(|(index, _count)| {
-                self.0.buffer.get(index).cloned()
+                self.0.buffer.get(index)
             })
             .take(number_of_documents)
             .collect()
@@ -82,7 +98,7 @@ impl DocumentReverseIndex {
 
     /// Adds a buffer of other documents, sorts them, uses the structured buffer, and then reruns
     /// the indexing process.
-    pub fn concatonate_dedup_and_reindex(self, buffer: Vec<String>) -> Self {
+    pub fn concatonate_dedup_and_reindex(self, buffer: Vec<T>) -> Self {
         self.0
             .concatonate_dedup_and_reindex(buffer, DocumentReverseIndex::split_string_and_index)
             .apply(DocumentReverseIndex)

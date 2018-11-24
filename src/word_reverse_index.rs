@@ -1,5 +1,4 @@
-
-use crate::ReverseIndex;
+use crate::reverse_index::ReverseIndex;
 use apply::Apply;
 
 /// The WordReverseIndex will ingest a set of words and will segment those words into 
@@ -7,14 +6,14 @@ use apply::Apply;
 /// This creates a reverse index where given an substring (starting at the beginning)
 /// of an indexed word, a list of full words can be retrieved.
 /// This structure is useful in constructing a basic completion engine, commonly found in shells.
-pub struct WordReverseIndex (ReverseIndex);
+pub struct WordReverseIndex (ReverseIndex<String>);
 
 impl WordReverseIndex {
     /// String_index MUST be in the range of the buffer.
     /// Gets the string in the buffer at the specified index,
     /// splits the string into substrings in the order [0..1] through [0..n],
     /// inserts these substrings as keys into the reverse index, pointing to the index.
-    fn split_string_and_index(ri: &mut ReverseIndex, string_index: usize) {
+    fn split_string_and_index(ri: &mut ReverseIndex<String>, string_index: usize) {
         let string = &ri.buffer[string_index];
         let len = string.len();
         for i in 1..=len {
@@ -44,7 +43,7 @@ impl WordReverseIndex {
             .apply(WordReverseIndex)
     }
 
-    pub fn get(&self, search: &str) -> Option<Vec<String>> {
+    pub fn get(&self, search: &str) -> Vec<&String> {
         self.0.get(search)
     }
 
@@ -70,7 +69,7 @@ fn ri_substring() {
     .collect();
 
     let ri = WordReverseIndex::from_buffer(words);
-    let found = ri.get("app").unwrap();
+    let found = ri.get("app");
     assert_eq!(found.len(), 2);
 }
 
@@ -89,7 +88,7 @@ fn ri_fullstring() {
     .collect();
 
     let ri = WordReverseIndex::from_buffer(words);
-    let found = ri.get("apple").unwrap();
+    let found = ri.get("apple");
     assert_eq!(found.len(), 1);
 }
 
@@ -106,7 +105,7 @@ fn ri_add_word() {
     let ri = WordReverseIndex::from_buffer(words);
     let ri = ri.add_word("yeet".to_string());
 
-    let found = ri.get("ye").unwrap();
+    let found = ri.get("ye");
     assert_eq!(found.len(), 1);
-    assert_eq!(found.get(0).unwrap(), &"yeet".to_string());
+    assert_eq!(**found.get(0).unwrap(), "yeet".to_string());
 }
