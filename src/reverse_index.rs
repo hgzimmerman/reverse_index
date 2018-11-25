@@ -62,7 +62,7 @@ where T: AsRef<str> + PartialEq + Ord
             .collect::<Vec<&T>>()
 
         } else {
-            Vec::new()
+            Vec::with_capacity(0)
         }
     }
 
