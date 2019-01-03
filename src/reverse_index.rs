@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
+use std::ops::Index;
 
-/// A datastructure that sacrifices memory size for speed,
+/// A data-structure that sacrifices memory size for speed,
 /// creating a large map of substrings to their constituent larger string.
 #[derive(Debug, Clone)]
-pub(crate) struct ReverseIndex<T: AsRef<str> + PartialEq + Ord> {
+pub(crate) struct ReverseIndex<T> {
     pub map: BTreeMap<String, Vec<usize>>, // the usize is an index
     pub buffer: Box<[T]>,
 }
@@ -13,6 +14,13 @@ pub(crate) trait IndexFn<T>: Fn(&mut ReverseIndex<T>, usize) -> () {}
 impl <F, T: AsRef<str>> IndexFn<T> for F where F: Fn(&mut ReverseIndex<T>, usize) -> () {}
 
 
+impl <T> Index<usize> for ReverseIndex<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &<Self as Index<usize>>::Output {
+        self.buffer.index(index)
+    }
+}
 
 impl <T> ReverseIndex<T>
 where T: AsRef<str> + PartialEq + Ord
@@ -29,6 +37,10 @@ where T: AsRef<str> + PartialEq + Ord
             index_fn(&mut ri,index);
         }
         ri
+    }
+
+    pub fn from_iter(iter: impl Iterator<Item=T>,  index_fn: impl IndexFn<T>) -> ReverseIndex<T> {
+        Self::from_buffer(iter.collect(), index_fn)
     }
 
 
@@ -66,11 +78,12 @@ where T: AsRef<str> + PartialEq + Ord
         }
     }
 
+
     pub fn eject_buffer(self) -> Vec<T> {
         Vec::from(self.buffer)
     }
 
-    /// Adds another vector of words to the ri.
+    /// Adds another vector of words to the RI.
     /// It performs sorting, and deduplication of the new buffer.
     /// Then it reindexes.
     pub fn concatonate_dedup_and_reindex(self, mut buffer: Vec<T>, index_fn: impl IndexFn<T>) -> Self {

@@ -1,18 +1,9 @@
 use crate::reverse_index::ReverseIndex;
 use apply::Apply;
+use std::collections::BTreeMap;
 
+use crate::ri_iter::RiIter;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Document {
-    pub name: String,
-    pub content: String
-}
-
-impl AsRef<str> for Document {
-    fn as_ref(&self) -> &str {
-        &self.content
-    }
-}
 
 
 /// The DocumentReverseIndex will ingest a document and segment it into individual words.
@@ -52,23 +43,18 @@ impl <T> DocumentReverseIndex<T>
         ReverseIndex::<T>::from_buffer(buffer, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
     }
 
+    pub fn from_iter(iter: impl Iterator<Item=T>) -> Self {
+        ReverseIndex::<T>::from_iter(iter, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
+    }
+
     /// Adds a document to the reverse index.
     pub fn add_document(self, string: T) -> Self {
         self.0.add_word(string, DocumentReverseIndex::split_string_and_index).apply(DocumentReverseIndex)
     }
 
-    /// Given a search string, this will split the search string by whitespace 
-    /// and search the reverse index for it.
-    /// It will select n documents ordered by how many of the search terms appeared in each
-    /// document.
-    ///
-    /// # Arguments
-    /// * `search` - The search string used to find documents.
-    /// * `number_of_documents` - The upper bound on the number of documents to return.
-    pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
+    /// Gets the indicies that can be used to look up the full documents.
+    fn get_indicies(&self, search: &str) -> impl Iterator<Item=usize> {
         let search_words: Vec<&str> = search.split_whitespace().collect();
-
-        use std::collections::BTreeMap;
 
         // Get the documents where the indices appear the most.
         let indicies_to_counts = search_words
@@ -82,15 +68,35 @@ impl <T> DocumentReverseIndex<T>
                     .for_each(|index| {
                         map.entry(*index)
                             .and_modify(|count| *count += 1)
-                            .or_insert_with(|| 1); 
+                            .or_insert_with(|| 1);
                     });
                 map
             });
+        indicies_to_counts.into_iter().map(|(index, _count)| index)
+    }
 
-        indicies_to_counts
-            .into_iter()
-            .filter_map(|(index, _count)| {
+    /// Given a search string, this will split the search string by whitespace 
+    /// and search the reverse index for it.
+    /// It will select n documents ordered by how many of the search terms appeared in each
+    /// document.
+    ///
+    /// # Arguments
+    /// * `search` - The search string used to find documents.
+    /// * `number_of_documents` - The upper bound on the number of documents to return.
+    pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
+        self.get_indicies(search)
+            .filter_map(|index| {
                 self.0.buffer.get(index)
+            })
+            .take(number_of_documents)
+            .collect()
+    }
+
+    /// Gets a list of iterators that can be used get and search around to adjacently ordered documents.
+    pub fn get_iters(&self, search: &str, number_of_documents: usize) -> Vec<RiIter<T>> {
+        self.get_indicies(search)
+            .map(|index| {
+                RiIter { index, reverse_index: &self.0 }
             })
             .take(number_of_documents)
             .collect()
@@ -105,58 +111,74 @@ impl <T> DocumentReverseIndex<T>
     }
 }
 
-#[test]
-fn get() {
-   let documents: Vec<String> = vec![
-        "the quick brown fox jumps over the lazy dog",
-        "lorem ipusm dolor sit",
-        "brown jumps"
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct Document {
+        pub name: String,
+        pub content: String
+    }
 
-    let ri = DocumentReverseIndex::from_buffer(documents);
-    let found = ri.get("the", 10);
-    assert_eq!(found.len(), 1);
-}
+    impl AsRef<str> for Document {
+        fn as_ref(&self) -> &str {
+            &self.content
+        }
+    }
+
+    #[test]
+    fn get() {
+        let documents: Vec<String> = vec![
+            "the quick brown fox jumps over the lazy dog",
+            "lorem ipusm dolor sit",
+            "brown jumps"
+        ]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let ri = DocumentReverseIndex::from_buffer(documents);
+        let found = ri.get("the", 10);
+        assert_eq!(found.len(), 1);
+    }
 
 
-#[test]
-fn get_ordered() {
-   let documents: Vec<String> = vec![
-        "the quick brown fox jumps over the lazy dog",
-        "lorem ipusm dolor sit",
-        "brown jumps"
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    #[test]
+    fn get_ordered() {
+        let documents: Vec<String> = vec![
+            "the quick brown fox jumps over the lazy dog",
+            "lorem ipusm dolor sit",
+            "brown jumps"
+        ]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
-    let ri = DocumentReverseIndex::from_buffer(documents);
-    let found = ri.get("brown fox jumps", 10);
-    assert_eq!(found.len(), 2);
-    // The first returned element should be the one that matches more words
-    assert_eq!(found[0], "the quick brown fox jumps over the lazy dog"); 
-}
+        let ri = DocumentReverseIndex::from_buffer(documents);
+        let found = ri.get("brown fox jumps", 10);
+        assert_eq!(found.len(), 2);
+        // The first returned element should be the one that matches more words
+        assert_eq!(found[0], "the quick brown fox jumps over the lazy dog");
+    }
 
-// TODO it would be nice to do a pass that will reorder based on how well the query sequentially
+    // TODO it would be nice to do a pass that will reorder based on how well the query sequentially
 // matches the document.
-#[test]
-fn get_equal_query_quality() {
-   let documents: Vec<String> = vec![
-        "the quick brown fox jumps over the lazy dog",
-        "lorem ipusm dolor sit",
-        "brown jumps"
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    #[test]
+    fn get_equal_query_quality() {
+        let documents: Vec<String> = vec![
+            "the quick brown fox jumps over the lazy dog",
+            "lorem ipusm dolor sit",
+            "brown jumps"
+        ]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
-    let ri = DocumentReverseIndex::from_buffer(documents);
-    let found = ri.get("brown jumps", 10);
-    assert_eq!(found.len(), 2);
-    // The first returned element should be the one that matches more words
-    assert_eq!(found[0], "the quick brown fox jumps over the lazy dog"); 
+        let ri = DocumentReverseIndex::from_buffer(documents);
+        let found = ri.get("brown jumps", 10);
+        assert_eq!(found.len(), 2);
+        // The first returned element should be the one that matches more words
+        assert_eq!(found[0], "the quick brown fox jumps over the lazy dog");
+    }
 }
