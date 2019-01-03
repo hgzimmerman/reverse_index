@@ -52,7 +52,7 @@ impl <T> DocumentReverseIndex<T>
     }
 
     /// Gets the indicies that can be used to look up the full documents.
-    fn get_indicies(&self, search: &str) -> impl Iterator<Item=usize> {
+    fn get_raw_indicies(&self, search: &str) -> impl Iterator<Item=usize> {
         let search_words: Vec<&str> = search.split_whitespace().collect();
 
         // Get the documents where the indices appear the most.
@@ -83,7 +83,7 @@ impl <T> DocumentReverseIndex<T>
     /// * `search` - The search string used to find documents.
     /// * `number_of_documents` - The upper bound on the number of documents to return.
     pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
-        self.get_indicies(search)
+        self.get_raw_indicies(search)
             .filter_map(|index| {
                 self.0.buffer.get(index)
             })
@@ -92,8 +92,8 @@ impl <T> DocumentReverseIndex<T>
     }
 
     /// Gets a list of iterators that can be used get and search around to adjacently ordered documents.
-    pub fn get_iters(&self, search: &str, number_of_documents: usize) -> Vec<RiIndex<T>> {
-        self.get_indicies(search)
+    pub fn get_indices(&self, search: &str, number_of_documents: usize) -> Vec<RiIndex<T>> {
+        self.get_raw_indicies(search)
             .map(|index| {
                 RiIndex::new(index, &self.0)
             })

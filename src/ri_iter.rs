@@ -17,26 +17,6 @@ pub struct RiIter<'a, T, U> {
     direction: PhantomData<U>
 }
 
-impl <'a, T> RiIter<'a, T, Forwards> {
-    pub (crate) fn new(reverse_index: &'a ReverseIndex<T>, index: usize) -> Self {
-        RiIter {
-            starting_index: index,
-            offset: 0,
-            reverse_index,
-            direction: PhantomData
-        }
-    }
-
-    pub fn into_backwards(&self) -> RiIter<'a, T, Backwards> {
-         RiIter {
-            starting_index: self.starting_index,
-            offset: 0,
-            reverse_index: self.reverse_index,
-            direction: PhantomData
-        }
-    }
-}
-
 impl <'a, T> Iterator for RiIter<'a, T, Forwards> {
     type Item = &'a T;
 
