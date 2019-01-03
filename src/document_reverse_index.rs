@@ -2,15 +2,14 @@ use crate::reverse_index::ReverseIndex;
 use apply::Apply;
 use std::collections::BTreeMap;
 
-use crate::ri_iter::RiIter;
-
+use crate::ri_iter::RiIndex;
 
 
 /// The DocumentReverseIndex will ingest a document and segment it into individual words.
 /// These words are used as keys that can be used to match on the whole document.
 /// This structure is useful in finding a document given a listing of words that appear in the
 /// document. 
-pub struct DocumentReverseIndex<T: AsRef<str> + PartialEq + Ord> (ReverseIndex<T>);
+pub struct DocumentReverseIndex<T> (ReverseIndex<T>);
 
 impl <T> DocumentReverseIndex<T>
     where T: AsRef<str> + PartialEq + Ord
@@ -93,10 +92,10 @@ impl <T> DocumentReverseIndex<T>
     }
 
     /// Gets a list of iterators that can be used get and search around to adjacently ordered documents.
-    pub fn get_iters(&self, search: &str, number_of_documents: usize) -> Vec<RiIter<T>> {
+    pub fn get_iters(&self, search: &str, number_of_documents: usize) -> Vec<RiIndex<T>> {
         self.get_indicies(search)
             .map(|index| {
-                RiIter { index, reverse_index: &self.0 }
+                RiIndex::new(index, &self.0)
             })
             .take(number_of_documents)
             .collect()
@@ -110,6 +109,7 @@ impl <T> DocumentReverseIndex<T>
             .apply(DocumentReverseIndex)
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -180,5 +180,45 @@ mod tests {
         assert_eq!(found.len(), 2);
         // The first returned element should be the one that matches more words
         assert_eq!(found[0], "the quick brown fox jumps over the lazy dog");
+    }
+
+
+    #[test]
+    fn get_iters_forward() {
+        let documents: Vec<String> = vec![
+            "the quick brown fox jumps over the lazy dog",
+            "lorem ipsum dolor sit",
+            "brown jumps"
+        ]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let ri = DocumentReverseIndex::from_buffer(documents);
+        let found = ri.get_iters("the", 10);
+        assert_eq!(found.len(), 1);
+        let mut forwards = found[0].forwards();
+        assert_eq!(forwards.next().unwrap(), &String::from("lorem ipsum dolor sit"));
+        assert_eq!(forwards.next().unwrap(), &String::from("brown jumps"));
+        assert!(forwards.next().is_none())
+    }
+
+    #[test]
+    fn get_iters_backward() {
+        let documents: Vec<String> = vec![
+            "the quick brown fox jumps over the lazy dog",
+            "lorem ipsum dolor sit",
+            "brown jumps"
+        ]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let ri = DocumentReverseIndex::from_buffer(documents);
+        let found = ri.get_iters("the", 10);
+        assert_eq!(found.len(), 1);
+        let ri_index = &found[0];
+        let mut backwards = ri_index.backwards();
+        assert!(backwards.next().is_none())
     }
 }
