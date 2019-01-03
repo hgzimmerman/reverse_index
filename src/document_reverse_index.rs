@@ -52,11 +52,11 @@ impl <T> DocumentReverseIndex<T>
     }
 
     /// Gets the indicies that can be used to look up the full documents.
-    fn get_raw_indicies(&self, search: &str) -> impl Iterator<Item=usize> {
+    pub fn get_indices(&self, search: &str) -> impl Iterator<Item=RiIndex<T>> {
         let search_words: Vec<&str> = search.split_whitespace().collect();
 
         // Get the documents where the indices appear the most.
-        let indicies_to_counts = search_words
+        let indices_to_counts = search_words
             .iter()
             .filter_map(|word| {
                 self.0.map.get(*word) // Get matching indices
@@ -71,7 +71,7 @@ impl <T> DocumentReverseIndex<T>
                     });
                 map
             });
-        indicies_to_counts.into_iter().map(|(index, _count)| index)
+        indices_to_counts.into_iter().map(move |(index, _count)| RiIndex::new(index, &self.0))
     }
 
     /// Given a search string, this will split the search string by whitespace 
@@ -83,23 +83,12 @@ impl <T> DocumentReverseIndex<T>
     /// * `search` - The search string used to find documents.
     /// * `number_of_documents` - The upper bound on the number of documents to return.
     pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
-        self.get_raw_indicies(search)
-            .filter_map(|index| {
-                self.0.buffer.get(index)
-            })
+        self.get_indices(search)
+            .map(|index: RiIndex<T>| &self.0[index.index])
             .take(number_of_documents)
             .collect()
     }
 
-    /// Gets a list of iterators that can be used get and search around to adjacently ordered documents.
-    pub fn get_indices(&self, search: &str, number_of_documents: usize) -> Vec<RiIndex<T>> {
-        self.get_raw_indicies(search)
-            .map(|index| {
-                RiIndex::new(index, &self.0)
-            })
-            .take(number_of_documents)
-            .collect()
-    }
 
     /// Adds a buffer of other documents, sorts them, uses the structured buffer, and then reruns
     /// the indexing process.
@@ -195,7 +184,7 @@ mod tests {
             .collect();
 
         let ri = DocumentReverseIndex::from_buffer(documents);
-        let found = ri.get_iters("the", 10);
+        let found = ri.get_indices("the").collect::<Vec<_>>();
         assert_eq!(found.len(), 1);
         let mut forwards = found[0].forwards();
         assert_eq!(forwards.next().unwrap(), &String::from("lorem ipsum dolor sit"));
@@ -215,7 +204,7 @@ mod tests {
             .collect();
 
         let ri = DocumentReverseIndex::from_buffer(documents);
-        let found = ri.get_iters("the", 10);
+        let found = ri.get_indices("the").collect::<Vec<_>>();
         assert_eq!(found.len(), 1);
         let ri_index = &found[0];
         let mut backwards = ri_index.backwards();

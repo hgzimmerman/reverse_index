@@ -47,7 +47,7 @@ impl <'a, T> Iterator for RiIter<'a, T, Backwards> {
 
 #[derive(Clone, Debug)]
 pub struct RiIndex<'a, T> {
-    index: usize,
+    pub (crate) index: usize,
     reverse_index: &'a ReverseIndex<T>,
 }
 
@@ -63,6 +63,7 @@ impl <'a,T> RiIndex<'a, T> {
     pub fn current(&self) -> &T {
         &self.reverse_index[self.index]
     }
+
     pub fn forwards(&self) -> RiIter<'a, T, Forwards> {
         RiIter {
             starting_index: self.index,
