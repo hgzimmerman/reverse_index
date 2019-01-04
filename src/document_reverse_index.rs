@@ -11,6 +11,12 @@ use crate::ri_iter::RiIndex;
 /// document. 
 pub struct DocumentReverseIndex<T> (ReverseIndex<T>);
 
+impl <T> AsRef<ReverseIndex<T>> for DocumentReverseIndex<T> {
+    fn as_ref(&self) -> &ReverseIndex<T> {
+        &self.0
+    }
+}
+
 impl <T> DocumentReverseIndex<T>
     where T: AsRef<str> + PartialEq + Ord
 {
@@ -52,7 +58,7 @@ impl <T> DocumentReverseIndex<T>
     }
 
     /// Gets the indicies that can be used to look up the full documents.
-    pub fn get_indices(&self, search: &str) -> impl Iterator<Item=RiIndex<T>> {
+    pub fn get_indices(&self, search: &str) -> impl Iterator<Item=RiIndex> {
         let search_words: Vec<&str> = search.split_whitespace().collect();
 
         // Get the documents where the indices appear the most.
@@ -71,7 +77,7 @@ impl <T> DocumentReverseIndex<T>
                     });
                 map
             });
-        indices_to_counts.into_iter().map(move |(index, _count)| RiIndex::new(index, &self.0))
+        indices_to_counts.into_iter().map(move |(index, _count)| RiIndex::new(index))
     }
 
     /// Given a search string, this will split the search string by whitespace 
@@ -84,7 +90,7 @@ impl <T> DocumentReverseIndex<T>
     /// * `number_of_documents` - The upper bound on the number of documents to return.
     pub fn get(&self, search: &str, number_of_documents: usize) -> Vec<&T> {
         self.get_indices(search)
-            .map(|index: RiIndex<T>| &self.0[index.index])
+            .map(|index: RiIndex| &self.0[index.index])
             .take(number_of_documents)
             .collect()
     }
@@ -186,7 +192,7 @@ mod tests {
         let ri = DocumentReverseIndex::from_buffer(documents);
         let found = ri.get_indices("the").collect::<Vec<_>>();
         assert_eq!(found.len(), 1);
-        let mut forwards = found[0].forwards();
+        let mut forwards = found[0].forwards(ri.as_ref());
         assert_eq!(forwards.next().unwrap(), &String::from("lorem ipsum dolor sit"));
         assert_eq!(forwards.next().unwrap(), &String::from("brown jumps"));
         assert!(forwards.next().is_none())
@@ -207,7 +213,7 @@ mod tests {
         let found = ri.get_indices("the").collect::<Vec<_>>();
         assert_eq!(found.len(), 1);
         let ri_index = &found[0];
-        let mut backwards = ri_index.backwards();
+        let mut backwards = ri_index.backwards(ri.as_ref());
         assert!(backwards.next().is_none())
     }
 }

@@ -4,13 +4,13 @@ use std::ops::Index;
 /// A data-structure that sacrifices memory size for speed,
 /// creating a large map of substrings to their constituent larger string.
 #[derive(Debug, Clone)]
-pub(crate) struct ReverseIndex<T> {
+pub struct ReverseIndex<T> {
     pub map: BTreeMap<String, Vec<usize>>, // the usize is an index
     pub buffer: Box<[T]>,
 }
 
 /// A function that determines how an element of the buffer will be indexed in the map.
-pub(crate) trait IndexFn<T>: Fn(&mut ReverseIndex<T>, usize) -> () {}
+pub trait IndexFn<T>: Fn(&mut ReverseIndex<T>, usize) -> () {}
 impl <F, T: AsRef<str>> IndexFn<T> for F where F: Fn(&mut ReverseIndex<T>, usize) -> () {}
 
 
