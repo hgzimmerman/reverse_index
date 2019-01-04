@@ -62,7 +62,7 @@ impl <T> DocumentReverseIndex<T>
         let search_words: Vec<&str> = search.split_whitespace().collect();
 
         // Get the documents where the indices appear the most.
-        let indices_to_counts = search_words
+        let counts_to_indices: BTreeMap<usize, Vec<usize>> = search_words
             .iter()
             .filter_map(|word| {
                 self.0.map.get(*word) // Get matching indices
@@ -76,8 +76,22 @@ impl <T> DocumentReverseIndex<T>
                             .or_insert_with(|| 1);
                     });
                 map
+            }) // At this point, we have a indices to counts relationship, but we want the opposite, so we reverse it
+            .into_iter()
+            .fold(BTreeMap::<usize,Vec<usize>>::new(), |mut map,(key_index, value_count) | {
+                map.entry(value_count)
+                    .and_modify(|indicies| indicies.push(key_index))
+                    .or_insert_with(move || vec![key_index]);
+                map
             });
-        indices_to_counts.into_iter().map(move |(index, _count)| RiIndex::new(index))
+
+
+       counts_to_indices
+           .into_iter()
+           .rev() // We want the highest counts first, so we reverse
+           .map(|(_count, indices)| indices.into_iter()) // We flatten the indices vec from each key so we get an iterator of just the indices
+           .flatten()
+           .map(move |index| RiIndex::new(index))
     }
 
     /// Given a search string, this will split the search string by whitespace 
